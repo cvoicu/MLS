@@ -36,6 +36,8 @@ public class Node implements Runnable {
 	private Socket config = null;
 	private Socket data = null;
 	private Socket host = null;
+	private ArrayList<Socket> subSubSocks = new ArrayList<Socket>();
+	private Socket subPubSock = null;
 	private PriorityList pl = null;
 	private ArrayList<ConnectedNode> replicaList = new ArrayList<ConnectedNode>();
 	private ArrayList<ConnectedNode> masters = new ArrayList<ConnectedNode>();
@@ -83,6 +85,12 @@ public class Node implements Runnable {
 		
 		data = context.socket(ZMQ.DEALER);
 		data.bind("tcp://"+nodeAddress+":"+dataPort);
+		
+		subPubSock = context.socket(ZMQ.PUB);
+		subPubSock.bind("tcp://"+nodeAddress+":"+12340);
+		
+		//subSubSock = context.socket(ZMQ.SUB);
+		//subSubSock.connect("tcp://"+addresOfExchanges);
 		
 		items = new ZMQ.Poller(100);
 		items.register(host);
@@ -199,6 +207,8 @@ public class Node implements Runnable {
 					String crashedName = config.recvStr();
 					log.info(name + " is informed that node crashed: "+crashedName);
 					handleCrash(crashedName);
+					subPubSock.sendMore("announceCrash");
+					subPubSock.send(crashedName);
 				}
 				if(message.compareTo("announce new node") == 0) {
 					String newNode = config.recvStr();

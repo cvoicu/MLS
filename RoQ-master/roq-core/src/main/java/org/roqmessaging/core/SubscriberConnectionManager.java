@@ -65,6 +65,9 @@ public class SubscriberConnectionManager implements Runnable {
 	//Ssubscriber to deliver the message
 	private IRoQSubscriber subscriber = null;
 	
+	private ZMQ.Socket exchSubControl;
+	private ZMQ.Socket exchPubControl;
+	
 	/**
 	 * @param monitor the monitor address to bind
 	 * @param monitorStat the monitor stat address to bind
@@ -146,8 +149,14 @@ public class SubscriberConnectionManager implements Runnable {
 			String[] brokerList = response.split(",");
 			this.exchSub = context.socket(ZMQ.SUB);
 			this.exchSub.subscribe("".getBytes());
+			this.exchSubControl = context.socket(ZMQ.SUB);
+			this.exchSubControl.subscribe("".getBytes());
+			this.exchPubControl = context.socket(ZMQ.PUB);
+			this.exchPubControl.bind("tcp://*:"+12345);
 			for (int i = 0; i < brokerList.length; i++) {
 				exchSub.connect("tcp://" + brokerList[i] );
+				String[] addr = brokerList[i].split(":");
+				exchSubControl.connect("tcp://"+addr[0]+":"+12340);
 				knownHosts.add(brokerList[i]);
 				logger.info("connected to " + brokerList[i]);
 			}
@@ -212,6 +221,7 @@ public class SubscriberConnectionManager implements Runnable {
 		this.items = new ZMQ.Poller(2);
 		this.items.register(monitorSub);
 		this.items.register(exchSub);
+		this.items.register(exchSubControl);
 
 		Timer timer = new Timer();
 		timer.schedule(new Stats(), 0, 40000);
@@ -230,6 +240,7 @@ public class SubscriberConnectionManager implements Runnable {
 					logger.info("listening to " + info[1]);
 					if (!knownHosts.contains(info[1])) {
 						exchSub.connect("tcp://" + info[1] );
+						exchSubControl.connect("tcp://"+info[1]+":"+12340);
 						knownHosts.add(info[1]);
 					}
 				}
@@ -261,6 +272,24 @@ public class SubscriberConnectionManager implements Runnable {
 					this.subscriber.onEvent(request!=null?request:new byte[]{});
 				}	
 				received++;
+			}
+			
+			if (items.pollin(2)) { //Event from Exchange.
+				String msg = exchSubControl.recvStr();
+				if(msg.compareTo("announceCrash")==0) {
+					String name = exchSubControl.recvStr();
+					//analyse msg and if interest send broadcast msg to all exchanges,
+					//in order to retrieve messages eventually lost.
+					//messages are sent through exchPubControl socket.
+				}
+				if(msg.compareTo(subsriberID)==0) {
+					String message = exchSubControl.recvStr();
+					//the message is dedicate to this subscriber (take some actions).
+				}
+				else {
+					String message = exchSubControl.recvStr();
+					//ignore the message
+				}
 			}
 		}
 		this.logger.debug("Closing subscriber sockets");
