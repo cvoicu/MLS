@@ -22,10 +22,6 @@ RoQ Host launcher.
 go to /roq/bin and launch:
 ./startHost.sh
 
-RoQ Log Manager launcher.
-go to /roq/bin and launch:
-./startLogMgmt.sh
-
 For testing:
 
 RoQ Queue launcher.
